@@ -35,6 +35,19 @@ type Client interface {
 
 	// GetPolicyStatement fetches a single policy statement by sys_id.
 	GetPolicyStatement(ctx context.Context, sysID string) (*PolicyStatementRecord, error)
+
+	// FetchSystems fetches systems/applications from ServiceNow.
+	FetchSystems(ctx context.Context, config *PaginationConfig, onProgress ProgressCallback) (*PaginatedResult[SystemRecord], error)
+
+	// FetchControls fetches controls for a system from ServiceNow.
+	FetchControls(ctx context.Context, systemSysID string, config *PaginationConfig, onProgress ProgressCallback) (*PaginatedResult[ControlRecord], error)
+
+	// FetchStatements fetches implementation statements for a control from ServiceNow.
+	FetchStatements(ctx context.Context, controlSysID string, config *PaginationConfig, onProgress ProgressCallback) (*PaginatedResult[StatementRecord], error)
+
+	// UpdateStatement updates a statement in ServiceNow.
+	// In DEMO mode, updates the incident's short_description field.
+	UpdateStatement(ctx context.Context, sysID string, content string) error
 }
 
 // AuthProvider provides authentication for ServiceNow requests.

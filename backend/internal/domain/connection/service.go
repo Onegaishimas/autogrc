@@ -183,7 +183,7 @@ func (s *Service) DeleteConnection(ctx context.Context) error {
 
 // GetSNClient returns a configured ServiceNow client for the active connection.
 // This method is used by other services that need to interact with ServiceNow.
-func (s *Service) GetSNClient(ctx context.Context) (*servicenow.SNClient, error) {
+func (s *Service) GetSNClient(ctx context.Context) (servicenow.Client, error) {
 	conn, err := s.repo.GetActive(ctx)
 	if err == ErrConnectionNotFound {
 		return nil, ErrConnectionNotFound

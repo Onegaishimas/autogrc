@@ -246,8 +246,67 @@ func checkResponseStatus(resp *http.Response) error {
 		return ErrRateLimited
 	case resp.StatusCode >= 500:
 		return fmt.Errorf("%w: status %d", ErrServerError, resp.StatusCode)
-	case resp.StatusCode != http.StatusOK:
+	case resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated:
 		return fmt.Errorf("%w: status %d", ErrInvalidResponse, resp.StatusCode)
 	}
+	return nil
+}
+
+// UpdateStatement updates a statement in ServiceNow.
+// DEMO MODE: Updates the incident's short_description field.
+// FOR IRM: Would update sn_compliance_policy_statement.u_implementation_statement
+func (c *SNClient) UpdateStatement(ctx context.Context, sysID string, content string) error {
+	endpoint := fmt.Sprintf("%s/api/now/table/%s/%s", c.config.InstanceURL, policyStatementTable, sysID)
+
+	// Build the payload - using short_description for demo (incident table)
+	// FOR IRM: Change to "u_implementation_statement" or appropriate field
+	payload := map[string]string{
+		"short_description": content,
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, strings.NewReader(string(payloadBytes)))
+	if err != nil {
+		return fmt.Errorf("%w: failed to create request: %v", ErrConnectionFailed, err)
+	}
+
+	// Set headers
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+
+	// Apply authentication
+	if c.auth != nil {
+		if err := c.auth.ApplyAuth(req); err != nil {
+			return fmt.Errorf("failed to apply auth: %w", err)
+		}
+	}
+
+	// Execute request with retries
+	var resp *http.Response
+	var lastErr error
+	for attempt := 0; attempt <= c.config.MaxRetries; attempt++ {
+		resp, lastErr = c.httpClient.Do(req)
+		if lastErr == nil && resp.StatusCode < 500 {
+			break
+		}
+		if attempt < c.config.MaxRetries {
+			time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
+		}
+	}
+
+	if lastErr != nil {
+		return fmt.Errorf("%w: %v", ErrConnectionFailed, lastErr)
+	}
+	defer resp.Body.Close()
+
+	// Handle response status codes
+	if err := checkResponseStatus(resp); err != nil {
+		return err
+	}
+
 	return nil
 }
