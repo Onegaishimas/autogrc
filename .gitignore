@@ -1,0 +1,41 @@
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+
+# Node
+node_modules/
+dist/
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/backend/bin/
+
+# Coverage
+coverage/
+*.cover
+*.coverage
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# Docker volumes (if mounted locally)
+postgres_data/

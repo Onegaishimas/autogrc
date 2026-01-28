@@ -1,0 +1,113 @@
+# ControlCRUD - Docker Compose Configuration
+# Domain: autogrc.mcslab.io
+
+services:
+  # =============================================================================
+  # Database
+  # =============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: controlcrud-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-controlcrud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-controlcrud_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-controlcrud}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5434:5432"  # Host port 5434 to avoid conflict with existing PostgreSQL
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-controlcrud} -d ${POSTGRES_DB:-controlcrud}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - controlcrud-network
+
+  # =============================================================================
+  # Backend API
+  # =============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: controlcrud-backend
+    restart: unless-stopped
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${POSTGRES_USER:-controlcrud}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-controlcrud_dev}
+      - DB_NAME=${POSTGRES_DB:-controlcrud}
+      - DB_SSLMODE=disable
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - SERVICENOW_TIMEOUT_SECONDS=${SERVICENOW_TIMEOUT_SECONDS:-30}
+      - SERVICENOW_MAX_RETRIES=${SERVICENOW_MAX_RETRIES:-3}
+      - SERVER_PORT=8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - controlcrud-network
+
+  # =============================================================================
+  # Frontend
+  # =============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=/api
+    container_name: controlcrud-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - controlcrud-network
+
+  # =============================================================================
+  # Nginx Reverse Proxy / Ingress
+  # =============================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: controlcrud-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      - backend
+      - frontend
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - controlcrud-network
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  controlcrud-network:
+    driver: bridge
+    name: controlcrud-network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres_data:
+    name: controlcrud-postgres-data
